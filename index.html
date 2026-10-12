@@ -74,10 +74,19 @@
       }
 
       /* ---------- Tabs ---------- */
+      /* Pinned to the top of the screen: the three section buttons stay
+         reachable no matter how far the feed below has scrolled. The solid
+         background keeps story cards from showing through as they pass
+         underneath. */
       nav.tabs {
         display: flex;
         gap: 8px;
-        margin: 16px 0 18px;
+        margin: 6px 0 10px;
+        padding: 10px 0;
+        position: sticky;
+        top: 0;
+        z-index: 20;
+        background: var(--bg);
       }
       nav.tabs button {
         flex: 1 1 0;
@@ -99,9 +108,16 @@
         border-color: var(--gold-bright);
         color: #171106;
       }
+      nav.tabs button:focus,
       nav.tabs button:focus-visible {
         outline: 2px solid var(--gold-bright);
         outline-offset: 2px;
+        background: #161106;
+        color: var(--ink);
+      }
+      nav.tabs button[aria-selected="true"]:focus {
+        background: var(--gold);
+        color: #171106;
       }
 
       /* ---------- Feed ---------- */
@@ -117,7 +133,9 @@
         border-radius: var(--radius);
         padding: 16px 18px 18px;
         box-shadow: inset 0 0 0 1px #000, inset 0 0 22px rgba(212, 175, 55, 0.05);
-        scroll-margin-top: 14px;
+        /* Clear the pinned tab bar (~78px tall) when a card is scrolled
+           into view, so its top never hides underneath the buttons. */
+        scroll-margin-top: 100px;
         cursor: pointer;
         -webkit-tap-highlight-color: transparent;
       }
@@ -314,9 +332,9 @@
       </header>
 
       <nav class="tabs" role="tablist" aria-label="Scroll sections">
-        <button type="button" role="tab" id="tab-meta" aria-controls="panel-meta" aria-selected="true">Meta</button>
-        <button type="button" role="tab" id="tab-industry" aria-controls="panel-industry" aria-selected="false">Industry News</button>
-        <button type="button" role="tab" id="tab-quiz" aria-controls="panel-quiz" aria-selected="false">Pop Quiz</button>
+        <button type="button" role="tab" id="tab-meta" aria-controls="panel-meta" aria-selected="true" tabindex="0">Meta</button>
+        <button type="button" role="tab" id="tab-industry" aria-controls="panel-industry" aria-selected="false" tabindex="-1">Industry News</button>
+        <button type="button" role="tab" id="tab-quiz" aria-controls="panel-quiz" aria-selected="false" tabindex="-1">Pop Quiz</button>
       </nav>
 
       <main>
@@ -359,15 +377,58 @@
             var panel = document.getElementById("panel-" + t);
             var active = t === name;
             btn.setAttribute("aria-selected", active ? "true" : "false");
+            /* Roving tabindex: only the selected tab sits in the tab order,
+               so the D-pad lands on the tab bar once and arrows move within it. */
+            btn.tabIndex = active ? 0 : -1;
             panel.hidden = !active;
           });
           updateFooter(name);
           window.scrollTo(0, 0);
         }
 
-        TABS.forEach(function (t) {
-          document.getElementById("tab-" + t).addEventListener("click", function () {
+        /* The way back up: content that has stepped to its first item hands
+           focus to the selected tab, so the tab bar is always one ArrowUp
+           away even without relying on the pinned bar being tapped. */
+        function focusActiveTab() {
+          var btn = document.querySelector('nav.tabs button[aria-selected="true"]');
+          if (btn) btn.focus();
+        }
+
+        TABS.forEach(function (t, i) {
+          var btn = document.getElementById("tab-" + t);
+          btn.addEventListener("click", function () {
             showTab(t);
+          });
+          /* Left/right (D-pad) steps between the tabs and selects the one
+             landed on; Home/End jump to the ends. Enter/Space/Select keep
+             their native button click, which also selects the tab. */
+          btn.addEventListener("keydown", function (ev) {
+            var target = null;
+            if (ev.key === "ArrowRight" || ev.key === "Right") {
+              target = (i + 1) % TABS.length;
+            } else if (ev.key === "ArrowLeft" || ev.key === "Left") {
+              target = (i + TABS.length - 1) % TABS.length;
+            } else if (ev.key === "Home") {
+              target = 0;
+            } else if (ev.key === "End") {
+              target = TABS.length - 1;
+            }
+            if (target !== null) {
+              ev.preventDefault();
+              showTab(TABS[target]);
+              document.getElementById("tab-" + TABS[target]).focus();
+              return;
+            }
+            /* ArrowDown steps off the tab bar into the open panel's first
+               item (first story card, or the quiz's first button). */
+            if (ev.key === "ArrowDown" || ev.key === "Down") {
+              var panel = document.getElementById("panel-" + t);
+              var first = panel && panel.querySelector(".card, button");
+              if (first) {
+                ev.preventDefault();
+                first.focus();
+              }
+            }
           });
         });
 
@@ -432,7 +493,13 @@
                 if (pos < cards.length - 1) focusCard(cards[pos + 1]);
               } else if (ev.key === "ArrowUp" || ev.key === "Up") {
                 ev.preventDefault();
-                if (pos > 0) focusCard(cards[pos - 1]);
+                if (pos > 0) {
+                  focusCard(cards[pos - 1]);
+                } else {
+                  /* Already on the first story: keep going up to the tabs
+                     instead of stopping dead. */
+                  focusActiveTab();
+                }
               } else if (ev.key === "Home") {
                 ev.preventDefault();
                 focusCard(cards[0]);
@@ -480,8 +547,8 @@
            page works unchanged on any static host such as GitHub Pages. The
            assets/ mirrors exist only so the artifact preview — which serves
            index.html + assets/ — can reach the same data. */
-        loadFeed("meta", ["data/meta.json", "data:application/json;base64,eyJzdG9yaWVzIjpbeyJkYXRlIjoiT2N0IDcsIDIwMjYiLCJoZWFkbGluZSI6Ik1ldGEgZG9uYXRlcyAxLDAwMCBSYXktQmFuIE1ldGEgZ2xhc3NlcyB0byBTaW5nYXBvcmUncyBkaXNhYmlsaXR5IGNvbW11bml0eSIsInN1YnRpdGxlIjoiSm9lbCBLYXBsYW4gYW5ub3VuY2VkIDEsMDAwIGdsYXNzZXMgZm9yIFNpbmdhcG9yZSdzIGJsaW5kIGFuZCBsb3ctdmlzaW9uIGNvbW11bml0eSwgcGx1cyAkMzBLIGZvciBhY2Nlc3NpYmlsaXR5IHRyYWluaW5nLiJ9LHsiZGF0ZSI6Ik9jdCA3LCAyMDI2IiwiaGVhZGxpbmUiOiJNZXRhJ3MgTXVzZSBBSSBhZ2VudCBjb21lcyB0byBpUGFkIiwic3VidGl0bGUiOiJNdXNlIGlzIG5vdyBhIGRlZGljYXRlZCBpUGFkIGFwcCDigJQgYW5vdGhlciBzdGVwIHRvd2FyZCB0aGUgYWdlbnQgbGl2aW5nIG9uIHBob25lLCB0YWJsZXQsIGFuZCBnbGFzc2VzLiJ9LHsiZGF0ZSI6Ik9jdCA2LCAyMDI2IiwiaGVhZGxpbmUiOiJEdXRjaCBleWV3ZWFyIGdpYW50IEhhbnMgQW5kZXJzIHB1bGxzIFJheS1CYW4gTWV0YSBmcm9tIDQwMCBzdG9yZXMgb3ZlciBwcml2YWN5IGZlYXJzIiwic3VidGl0bGUiOiJUaGUgRHV0Y2ggY2hhaW4gaGFsdGVkIHNhbGVzIGF0IH40MDAgc3RvcmVzIG92ZXIgc2VjcmV0LWZpbG1pbmcgZmVhcnMuIE1ldGEncyBhbnN3ZXI6IHRoZSBMRUQgdGhhdCBjYW4ndCBiZSBzd2l0Y2hlZCBvZmYuIn0seyJkYXRlIjoiT2N0IDYsIDIwMjYiLCJoZWFkbGluZSI6Ikhvcml6b24gT1MgMi45IGhpdHMgdGhlIFB1YmxpYyBUZXN0IENoYW5uZWwgd2l0aCBhIHdpbmRvdy1tYW5hZ2VyIG92ZXJoYXVsIiwic3VidGl0bGUiOiJUZXN0LWNoYW5uZWwgUXVlc3RzIGdldCBhIG5ldyB3aW5kb3cgbWFuYWdlciwgY2xhc3NpYyBIb21lIGVudmlyb25tZW50cyBiYWNrLCBhbmQgYSBidWlsdC1pbiBRUiBzY2FubmVyLiBQVEMgb25seS4ifSx7ImRhdGUiOiJPY3QgNSwgMjAyNiIsImhlYWRsaW5lIjoiUmF5LUJhbiBNZXRhIHVwZGF0ZXMgYWRkIHR1cm4tYnktdHVybiB3YWxraW5nIG5hdmlnYXRpb24gYW5kIG5ldyBhdWRpbyBjb250cm9scyIsInN1YnRpdGxlIjoidjEyOCBhZGRzICdIZXkgTWV0YSwgbmF2aWdhdGUgdG/igKYnIHdhbGtpbmcgZGlyZWN0aW9uczsgdjEyOSBhZGRzIE1vbm8gQXVkaW8gYW5kIGJhbGFuY2UgY29udHJvbHMuIFJvbGxpbmcgb3V0IG5vdy4ifV0sInVwZGF0ZWQiOiJPY3QgOCwgMjAyNiJ9"], "feed-meta");
-        loadFeed("industry", ["data/industry.json", "data:application/json;base64,eyJzdG9yaWVzIjpbeyJkYXRlIjoiT2N0IDgsIDIwMjYiLCJoZWFkbGluZSI6Ik5ZQyBuaWdodGNsdWJzIGFyZSBiYW5uaW5nIHNtYXJ0IGdsYXNzZXMg4oCUIGFuZCB0aHJlYXRlbmluZyBibGFja2xpc3RzIiwic3VidGl0bGUiOiJWZW51ZXMgbGlrZSBRdWVlbnMnIEJhc2VtZW50IG5vdyBlamVjdCDigJQgYW5kIG1heSBwZXJtYW5lbnRseSBiYW4g4oCUIGFueW9uZSB3ZWFyaW5nIGNhbWVyYSBnbGFzc2VzLiJ9LHsiZGF0ZSI6Ik9jdCA3LCAyMDI2IiwiaGVhZGxpbmUiOiJYcmVhbCBvcGVucyBBdXJhIHByZS1vcmRlcnMgYXQgJDEsMjc5IOKAlCAkMjAgdW5kZXIgTWV0YSdzIFZSIEdsYXNzZXMsIHNoaXBwaW5nIHdlZWtzIGVhcmxpZXIiLCJzdWJ0aXRsZSI6IlhyZWFsJ3MgJDEsMjc5IEFuZHJvaWQgWFIgZ2xhc3NlcyBzaGlwIGluIHdlZWtzLCB1bmRlcmN1dHRpbmcgTWV0YSdzICQxLDI5OSBWUiBHbGFzc2VzIChzcHJpbmcgMjAyNykuIn0seyJkYXRlIjoiT2N0IDYsIDIwMjYiLCJoZWFkbGluZSI6Ik5vcndheSdzIHNtYXJ0LWdsYXNzZXMgYmFuIHByb3Bvc2FsIG5vdyAnaGlnaCBwcmlvcml0eSciLCJzdWJ0aXRsZSI6Ik5vcndheSBub3cgY2FsbHMgaXRzIHNtYXJ0LWdsYXNzZXMgYmFuIHByb3Bvc2FsICdoaWdoIHByaW9yaXR5LicgTWV0YSdzIHJlc3BvbnNlOiB0aGUgTEVEIHRoYXQgY2FuJ3QgYmUgZGlzYWJsZWQuIn0seyJkYXRlIjoiT2N0IDUsIDIwMjYiLCJoZWFkbGluZSI6IkFwcGxlIHJlcG9ydGVkbHkgZGVsYXlpbmcgaXRzIHNtYXJ0IGdsYXNzZXMgYW1pZCB0aGUgTWV0YSBwcml2YWN5IGJhY2tsYXNoIiwic3VidGl0bGUiOiJBcHBsZSBpcyByZXBvcnRlZGx5IGRlbGF5aW5nIGl0cyBydW1vcmVkIDIwMjcgZ2xhc3NlcyBhcyB0cnVzdCBpbiBjYW1lcmEgZ2xhc3NlcyB3b2JibGVzLiBTdGlsbCBqdXN0IGEgcmVwb3J0LiJ9LHsiZGF0ZSI6Ik9jdCAxLCAyMDI2IiwiaGVhZGxpbmUiOiJTbmFwJ3MgJDIsMTk1IFNwZWNzIHBvcC11cCBpcyBvcGVuIGluIExBIHRocm91Z2ggbWlkLUphbnVhcnkiLCJzdWJ0aXRsZSI6IlRyeSBTbmFwJ3MgJDIsMTk1IEFSIFNwZWNzIHdpdGggZnJlZSBkZW1vcyBhdCBXZXN0ZmllbGQgQ2VudHVyeSBDaXR5LCBvcGVuIHRocm91Z2ggSmFuIDE1LiJ9XSwidXBkYXRlZCI6Ik9jdCA4LCAyMDI2In0="], "feed-industry");
+        loadFeed("meta", ["data/meta.json", "data:application/json;base64,eyJzdG9yaWVzIjpbeyJkYXRlIjoiT2N0IDcsIDIwMjYiLCJoZWFkbGluZSI6Ik1ldGEgZG9uYXRlcyAxLDAwMCBSYXktQmFuIE1ldGEgZ2xhc3NlcyB0byBTaW5nYXBvcmUncyBkaXNhYmlsaXR5IGNvbW11bml0eSIsInN1YnRpdGxlIjoiSm9lbCBLYXBsYW4gYW5ub3VuY2VkIDEsMDAwIGdsYXNzZXMgZm9yIFNpbmdhcG9yZSdzIGJsaW5kIGFuZCBsb3ctdmlzaW9uIGNvbW11bml0eSwgcGx1cyAkMzBLIGZvciBhY2Nlc3NpYmlsaXR5IHRyYWluaW5nLiBUaGUgZ2xhc3NlcycgY2FtZXJhIGFuZCBNZXRhIEFJIGNhbiBkZXNjcmliZSB3aGF0J3MgYXJvdW5kIHRoZSB3ZWFyZXIgb3V0IGxvdWQg4oCUIGEgc3Ryb25nLCBjb25jcmV0ZSBhbnN3ZXIgd2hlbiBhIGN1c3RvbWVyIGFza3Mgd2hhdCBzbWFydCBnbGFzc2VzIGFyZSBhY3R1YWxseSBmb3IgYmV5b25kIHBob3Rvcy4ifSx7ImRhdGUiOiJPY3QgNywgMjAyNiIsImhlYWRsaW5lIjoiTWV0YSdzIE11c2UgQUkgYWdlbnQgY29tZXMgdG8gaVBhZCIsInN1YnRpdGxlIjoiTXVzZSBpcyBub3cgYSBkZWRpY2F0ZWQgaVBhZCBhcHAg4oCUIGFub3RoZXIgc3RlcCB0b3dhcmQgdGhlIGFnZW50IGxpdmluZyBvbiBwaG9uZSwgdGFibGV0LCBhbmQgZ2xhc3Nlcy4gRXhwZWN0IGN1c3RvbWVycyB0byBhc2sgd2hldGhlciB0aGUgc2FtZSBhc3Npc3RhbnQgZm9sbG93cyB0aGVtIGZyb20gZGV2aWNlIHRvIGRldmljZTsgaW5jcmVhc2luZ2x5LCB0aGUgYW5zd2VyIGlzIHllcy4ifSx7ImRhdGUiOiJPY3QgNiwgMjAyNiIsImhlYWRsaW5lIjoiRHV0Y2ggZXlld2VhciBnaWFudCBIYW5zIEFuZGVycyBwdWxscyBSYXktQmFuIE1ldGEgZnJvbSA0MDAgc3RvcmVzIG92ZXIgcHJpdmFjeSBmZWFycyIsInN1YnRpdGxlIjoiVGhlIER1dGNoIGNoYWluIGhhbHRlZCBzYWxlcyBhdCB+NDAwIHN0b3JlcyBvdmVyIHNlY3JldC1maWxtaW5nIGZlYXJzLiBNZXRhJ3MgYW5zd2VyOiB0aGUgTEVEIHRoYXQgY2FuJ3QgYmUgc3dpdGNoZWQgb2ZmLiBXb3J0aCBrbm93aW5nIGNvbGQsIGJlY2F1c2UgdGhpcyBpcyB0aGUgcHJpdmFjeSBzdG9yeSBtb3N0IGxpa2VseSB0byBiZSBxdW90ZWQgYmFjayBhdCB0aGUgY291bnRlciB0aGlzIHdlZWsuIn0seyJkYXRlIjoiT2N0IDYsIDIwMjYiLCJoZWFkbGluZSI6Ikhvcml6b24gT1MgMi45IGhpdHMgdGhlIFB1YmxpYyBUZXN0IENoYW5uZWwgd2l0aCBhIHdpbmRvdy1tYW5hZ2VyIG92ZXJoYXVsIiwic3VidGl0bGUiOiJUZXN0LWNoYW5uZWwgUXVlc3RzIGdldCBhIG5ldyB3aW5kb3cgbWFuYWdlciwgY2xhc3NpYyBIb21lIGVudmlyb25tZW50cyBiYWNrLCBhbmQgYSBidWlsdC1pbiBRUiBzY2FubmVyLiBQVEMgb25seSwgc28gaXQgaXNuJ3Qgb24gY3VzdG9tZXIgaGVhZHNldHMgeWV0IOKAlCBidXQgaXQgcHJldmlld3Mgd2hlcmUgSG9yaXpvbiBPUyBtdWx0aXRhc2tpbmcgYW5kIHdpbmRvdyBoYW5kbGluZyBhcmUgaGVhZGVkIG5leHQuIn0seyJkYXRlIjoiT2N0IDUsIDIwMjYiLCJoZWFkbGluZSI6IlJheS1CYW4gTWV0YSB1cGRhdGVzIGFkZCB0dXJuLWJ5LXR1cm4gd2Fsa2luZyBuYXZpZ2F0aW9uIGFuZCBuZXcgYXVkaW8gY29udHJvbHMiLCJzdWJ0aXRsZSI6InYxMjggYWRkcyAnSGV5IE1ldGEsIG5hdmlnYXRlIHRv4oCmJyB3YWxraW5nIGRpcmVjdGlvbnM7IHYxMjkgYWRkcyBNb25vIEF1ZGlvIGFuZCBiYWxhbmNlIGNvbnRyb2xzLiBSb2xsaW5nIG91dCBub3cuIE5hdmlnYXRpb24gbWFrZXMgYW4gZWFzeSBkZW1vOiBoYW5kcy1mcmVlIGRpcmVjdGlvbnMgc3Bva2VuIGluIHlvdXIgZWFyLCBubyBwaG9uZSBpbiBoYW5kLiJ9XSwidXBkYXRlZCI6Ik9jdCA4LCAyMDI2In0="], "feed-meta");
+        loadFeed("industry", ["data/industry.json", "data:application/json;base64,eyJzdG9yaWVzIjpbeyJkYXRlIjoiT2N0IDgsIDIwMjYiLCJoZWFkbGluZSI6Ik5ZQyBuaWdodGNsdWJzIGFyZSBiYW5uaW5nIHNtYXJ0IGdsYXNzZXMg4oCUIGFuZCB0aHJlYXRlbmluZyBibGFja2xpc3RzIiwic3VidGl0bGUiOiJWZW51ZXMgbGlrZSBRdWVlbnMnIEJhc2VtZW50IG5vdyBlamVjdCDigJQgYW5kIG1heSBwZXJtYW5lbnRseSBiYW4g4oCUIGFueW9uZSB3ZWFyaW5nIGNhbWVyYSBnbGFzc2VzLiBUaGUgbGluZSBmb3IgY3VzdG9tZXJzOiBwcml2YXRlIHZlbnVlcyBzZXQgdGhlaXIgb3duIHJ1bGVzLCBzbyB3aGlsZSB0aGUgZ2xhc3NlcyBhcmUgZmluZSBpbiBwdWJsaWMsIGEgYnVzaW5lc3MgY2FuIGFsd2F5cyBhc2sgZm9yIHRoZW0gdG8gY29tZSBvZmYgaW5zaWRlLiJ9LHsiZGF0ZSI6Ik9jdCA3LCAyMDI2IiwiaGVhZGxpbmUiOiJYcmVhbCBvcGVucyBBdXJhIHByZS1vcmRlcnMgYXQgJDEsMjc5IOKAlCAkMjAgdW5kZXIgTWV0YSdzIFZSIEdsYXNzZXMsIHNoaXBwaW5nIHdlZWtzIGVhcmxpZXIiLCJzdWJ0aXRsZSI6IlhyZWFsJ3MgJDEsMjc5IEFuZHJvaWQgWFIgZ2xhc3NlcyBzaGlwIGluIHdlZWtzLCB1bmRlcmN1dHRpbmcgTWV0YSdzICQxLDI5OSBWUiBHbGFzc2VzIChzcHJpbmcgMjAyNykuIEEgcmVhbCBjb21wZXRpdG9yIHJlYWNoaW5nIHNoZWx2ZXMgZmlyc3Qg4oCUIGV4cGVjdCBzaWRlLWJ5LXNpZGUgcXVlc3Rpb25zIG9uIHByaWNlLCBzaGlwIGRhdGUsIGFuZCB3aGF0IGVhY2ggcGFpciBhY3R1YWxseSBkb2VzLiJ9LHsiZGF0ZSI6Ik9jdCA2LCAyMDI2IiwiaGVhZGxpbmUiOiJOb3J3YXkncyBzbWFydC1nbGFzc2VzIGJhbiBwcm9wb3NhbCBub3cgJ2hpZ2ggcHJpb3JpdHknIiwic3VidGl0bGUiOiJOb3J3YXkgbm93IGNhbGxzIGl0cyBzbWFydC1nbGFzc2VzIGJhbiBwcm9wb3NhbCAnaGlnaCBwcmlvcml0eS4nIE1ldGEncyByZXNwb25zZTogdGhlIExFRCB0aGF0IGNhbid0IGJlIGRpc2FibGVkLiBJdCdzIHN0aWxsIGEgcHJvcG9zYWwgcmF0aGVyIHRoYW4gYSBsYXcsIGJ1dCBpdCdzIGV4YWN0bHkgdGhlIGtpbmQgb2YgaGVhZGxpbmUgYSBjdXN0b21lciBtYXkgYnJpbmcgdXAgaW4gc3RvcmUuIn0seyJkYXRlIjoiT2N0IDUsIDIwMjYiLCJoZWFkbGluZSI6IkFwcGxlIHJlcG9ydGVkbHkgZGVsYXlpbmcgaXRzIHNtYXJ0IGdsYXNzZXMgYW1pZCB0aGUgTWV0YSBwcml2YWN5IGJhY2tsYXNoIiwic3VidGl0bGUiOiJBcHBsZSBpcyByZXBvcnRlZGx5IGRlbGF5aW5nIGl0cyBydW1vcmVkIDIwMjcgZ2xhc3NlcyBhcyB0cnVzdCBpbiBjYW1lcmEgZ2xhc3NlcyB3b2JibGVzLiBTdGlsbCBqdXN0IGEgcmVwb3J0LiBJZiBpdCBob2xkcywgTWV0YSBrZWVwcyB0aGUgc21hcnQtZ2xhc3NlcyBzaGVsZiBsYXJnZWx5IHRvIGl0c2VsZiBmb3IgYSB3aGlsZSBsb25nZXIuIn0seyJkYXRlIjoiT2N0IDEsIDIwMjYiLCJoZWFkbGluZSI6IlNuYXAncyAkMiwxOTUgU3BlY3MgcG9wLXVwIGlzIG9wZW4gaW4gTEEgdGhyb3VnaCBtaWQtSmFudWFyeSIsInN1YnRpdGxlIjoiVHJ5IFNuYXAncyAkMiwxOTUgQVIgU3BlY3Mgd2l0aCBmcmVlIGRlbW9zIGF0IFdlc3RmaWVsZCBDZW50dXJ5IENpdHksIG9wZW4gdGhyb3VnaCBKYW4gMTUuIEhhbmR5IGNvbnRleHQgZm9yIHByaWNlIHF1ZXN0aW9uczogYSBjb21wZXRpdG9yJ3MgdHJ1ZSBBUiBnbGFzc2VzIHJ1biB3ZWxsIG92ZXIgdGhyZWUgdGltZXMgdGhlIHByaWNlIG9mIGEgcGFpciBvZiBSYXktQmFuIE1ldGEuIn1dLCJ1cGRhdGVkIjoiT2N0IDgsIDIwMjYifQ=="], "feed-industry");
 
         /* ---------- Pop Quiz (baked in; changes rarely) ---------- */
         var QUESTIONS = [
@@ -523,6 +590,17 @@
 
         var quizRoot = document.getElementById("quiz-root");
         var qIndex = 0;
+
+        /* Same way back up as the feeds: ArrowUp on the quiz's first button
+           returns focus to the tab bar. */
+        quizRoot.addEventListener("keydown", function (ev) {
+          if (ev.key !== "ArrowUp" && ev.key !== "Up") return;
+          var btns = quizRoot.querySelectorAll("button");
+          if (btns.length && ev.target === btns[0]) {
+            ev.preventDefault();
+            focusActiveTab();
+          }
+        });
 
         function renderQuestion() {
           var item = QUESTIONS[qIndex];
