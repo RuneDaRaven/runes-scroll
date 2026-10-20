@@ -1,0 +1,55 @@
+{
+  "questions": [
+    {
+      "correct": 1,
+      "fact": "The charging case adds roughly 50 more hours — that's the \"all-day\" answer for the floor.",
+      "options": [
+        "About 4 hours",
+        "Up to 9 hours",
+        "A full 24 hours"
+      ],
+      "q": "A customer asks how long the battery lasts on the new Ray-Ban Meta Gen 3 glasses. What do you tell them?"
+    },
+    {
+      "correct": 1,
+      "fact": "They're the answer for customers who want the look, music and calls without any camera.",
+      "options": [
+        "They have a better camera",
+        "They have no camera at all",
+        "They only work with iPhones"
+      ],
+      "q": "What's the key difference of the $349 Ray-Ban Meta Audio glasses?"
+    },
+    {
+      "correct": 2,
+      "fact": "Meta View was the old app name — if a customer mentions it, they're thinking of the right thing, just outdated.",
+      "options": [
+        "Meta View",
+        "Facebook",
+        "The Meta AI app"
+      ],
+      "q": "A customer just bought Ray-Ban Meta glasses. Which app do they pair them with?"
+    },
+    {
+      "correct": 1,
+      "fact": "The 3S is the budget pick; the Quest 3 is the step-up with better displays and full-color mixed reality.",
+      "options": [
+        "Quest 3",
+        "Quest 3S",
+        "Quest Pro"
+      ],
+      "q": "A customer wants the cheapest way into VR. Which headset do you point them to?"
+    },
+    {
+      "correct": 2,
+      "fact": "Meta even pushed a software update so the camera stops working if the LED is covered or tampered with.",
+      "options": [
+        "It can be switched off in settings",
+        "There isn't one",
+        "It flashes on every photo and video and can't be turned off without disabling the camera"
+      ],
+      "q": "A customer worries the glasses could secretly record people. What do you tell them about the capture light?"
+    }
+  ],
+  "updated": "Oct 20, 2026"
+}
